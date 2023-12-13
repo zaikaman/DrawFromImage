@@ -14,17 +14,20 @@ from win32.win32api import GetSystemMetrics
 from PIL import ImageGrab
 import pygame
 from pygame import mixer
+import tkinter as tk
+import time
+from PIL import Image
 
 WriteStep = 15  # Số lần lấy mẫu cho hàm Bézier
 Speed = 1000
-Width = 600  # Chiều rộng màn hình
+Width = 320  # Chiều rộng màn hình
 Height = 600  # Chiều cao màn hình
 Xh = 0  # Lưu trữ tay cầm của hàm Bézier trước đó
 Yh = 0
 scale = (1, 1)
 first = True
 K = 32
-
+screen = te.Screen()
 
 def Bezier(p1, p2, t):  # Hàm Bézier bậc 1
     return p1 * (1 - t) + p2 * t
@@ -140,7 +143,7 @@ def readPathAttrD(w_attr):
             yield float(i[0: -1])
         elif i[0] == '-':
             yield float(i)
-
+            
 
 def drawSVG(filename, w_color):
     global first
@@ -148,11 +151,13 @@ def drawSVG(filename, w_color):
     SVG = BeautifulSoup(SVGFile.read(), 'lxml-xml')
     Height = float(SVG.svg.attrs['height'][0: -2])
     Width = float(SVG.svg.attrs['width'][0: -2])
+    
     transform(SVG.g.attrs['transform'])
     if first:
         te.setup(height=Height, width=Width)
         te.setworldcoordinates(-Width / 2, 300, Width -
                                Width / 2, -Height + 300)
+        #screen.setup(width=1.0, height=1.0) # Note that it needs to be 1.0, and not 1
         first = False
     te.tracer(100)
     te.pensize(1)
@@ -213,7 +218,6 @@ def drawBitmap(w_image):
     mixer.music.load('music.mp3')  # Thay 'ten_file_nhac.mp3' bằng tên tệp nhạc của bạn
     mixer.music.play()
     
-    print('Đang giảm số màu...')
     Z = w_image.reshape((-1, 3))
 
     # Chuyển đổi sang np.float32
@@ -241,34 +245,63 @@ def drawBitmap(w_image):
         drawSVG('.tmp.svg', '#%02x%02x%02x' % (i[2], i[1], i[0]))
     os.remove('.tmp.bmp')
     os.remove('.tmp.svg')
-    print('\n\rHoàn tất, đóng cửa sổ để thoát.')
-    te.done()
+
+def convert_eps_to_jpg(eps_file, jpg_file):
+    try:
+        # Mở tệp EPS và lưu ảnh tạm thời dưới dạng PNG
+        with Image.open(eps_file) as img:
+            img.save("temp.png", format="PNG")
+
+        # Mở ảnh PNG và lưu lại dưới dạng JPG
+        with Image.open("temp.png") as img_png:
+            img_png.save(jpg_file, format="JPEG")
+
+        te.done()
+    except Exception as e:
+        print(f"Lỗi: {e}")
+   
+    
+def save_drawing():
+    canvas = te.getcanvas()
+    canvas.postscript(file='drawing.eps', colormode='color')
+    print('\n\rXong ròi, noel zui zẻ ha kvan :D')
 
 
 if __name__ == '__main__':
     paser = argparse.ArgumentParser(
         description="Chuyển đổi ảnh bitmap thành SVG và sử dụng thư viện turtle để vẽ nó.")
-    paser.add_argument('filename', type=str, nargs='?', default='tuanhuyen.png',
-                        help='Tên tệp (* .jpg, * .png, * .bmp) của tệp bạn muốn chuyển đổi. Mặc định là tuanhuyen.png')
+    paser.add_argument('filename', type=str, nargs='?', default='van.jpg',
+                        help='Tên tệp (* .jpg, * .png, * .bmp) của tệp bạn muốn chuyển đổi.')
     paser.add_argument(
-        "-c", "--color", help="Số màu bạn muốn sử dụng. (Nếu số lượng màu quá lớn thì chương trình có thể chạy rất chậm.)", type=int, default=32)
+        "-c", "--color", help="Số màu bạn muốn sử dụng. (Nếu số lượng màu quá lớn thì chương trình có thể chạy rất chậm.)", type=int, default=5)
     args = paser.parse_args()
     K = args.color
     try:
         bitmapFile = open(args.filename, mode='r')
     except FileNotFoundError:
         print(__file__ + ': error: Tệp không tồn tại.')
-        sys.exit()  # Exit if the file doesn't exist
+    except Exception as file_error:
+        print(__file__ + f': error: {file_error}')
 
     if os.path.splitext(args.filename)[1].lower() not in ['.jpg', '.bmp', '.png']:
         print(__file__ + ': error: Tệp không phải là tệp bitmap.')
-        sys.exit()  # Exit if the file is not a bitmap
+    else:
+        bitmap = cv2.imread(args.filename)
 
-    bitmap = cv2.imread(args.filename)
-    if bitmap.shape[0] > GetSystemMetrics(1):
-        bitmap = cv2.resize(bitmap, (int(bitmap.shape[1] * (
-            (GetSystemMetrics(1) - 50) / bitmap.shape[0])), GetSystemMetrics(1) - 50))
-    drawBitmap(bitmap)
-
-    print("Chúc thanh huyn giáng sinh zui zẻ.")
-    sys.exit()
+        if bitmap is None:
+            print(__file__ + ': error: Không thể đọc tệp hình ảnh.')
+        else:
+            if bitmap.shape[0] > GetSystemMetrics(1):
+                bitmap = cv2.resize(bitmap, (int(bitmap.shape[1] * (
+                    (GetSystemMetrics(1) - 50) / bitmap.shape[0])), GetSystemMetrics(1) - 50))
+            try:
+                drawBitmap(bitmap)
+                
+                save_drawing()  # Call the save_drawing function here
+                # Thay đổi tên tệp EPS và tên tệp JPG theo ý muốn
+                convert_eps_to_jpg("drawing.eps", "drawing.jpg") 
+                print("Hoàn tất chương trình.")
+            except Exception as draw_error:
+                print(__file__ + f': error: {draw_error}')
+                import traceback
+                traceback.print_exc()
